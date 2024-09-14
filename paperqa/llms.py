@@ -8,11 +8,6 @@ from enum import StrEnum
 from inspect import signature
 from sys import version_info
 from typing import Any
-from sentence-transformers import SentenceTransformer
-from FlagEmbedding import BGEM3FlagModel
-from functools import partial
-from collections.abc import Iterable
-import re
 
 import numpy as np
 import tiktoken
@@ -110,55 +105,6 @@ class HybridEmbeddingModel(EmbeddingModel):
         )
         return np.concatenate(all_embeds, axis=1)
 
-# Concrete implementation using Sentence Transformer
-class SentenceTransformerModel(EmbeddingModel):
-    model: SentenceTransformer = None
-    mode: str = EmbeddingModes.DEFAULT
-
-    def __init__(self, model_name: str):
-        self.model = SentenceTransformer(model_name)
-
-    def encode(self, sentences, batch_size=12, max_length=8192):
-
-        if isinstance(sentences, list):
-            return [self.model.encode(sentence, batch_size=batch_size,max_length=max_length) for sentence in sentences]
-        else:
-            return self.model.encode(sentences, batch_size=batch_size, max_length=max_length)['dense_vecs']
-
-    def set_mode(self, mode: EmbeddingModes) -> None:
-        """Set the mode of the embedding model. This could affect behavior if relevant."""
-        self.mode = mode
-        # Depending on the specific model, you can configure modes if needed
-        # For example, some models may have different embedding modes.
-
-    async def embed_documents(self, texts: List[str], batch_size=12, max_length=8192) -> List[List[float]]:
-        """Asynchronously embed documents using Sentence Transformer."""
-        loop = asyncio.get_event_loop()
-        encode_function = partial(self.encode,batch_size=batch_size, max_length=max_length)
-        embeddings = await loop.run_in_executor(None, self.m)
-        #embeddings = [embedding.tolist() for embedding in embeddings_raw]
-        return embeddings
-
-class BGEModel(EmbeddingModel):
-    model: BGEM3FlagModel
-
-    def __init__(self, model_name: str)
-        self.model = BGEM3FlagModel(model_name, use_fp16=True)
-
-    def encode(self, sentences, batch_size=12, max_length=8192):
-
-        if isinstance(sentences, list):
-            return [self.model.encode(sentence, batch_size=batch_size,max_length=max_length) for sentence in sentences]
-        else:
-            return self.model.encode(sentences, batch_size=batch_size, max_length=max_length)['dense_vecs']
-
-    async def embed_documents(self, texts: List[str], batch_size=12, max_length=8192) -> List[List[float]]:
-        """Asynchronously embed documents using Sentence Transformer."""
-        loop = asyncio.get_event_loop()
-        encode_function = partial(self.encode,batch_size=batch_size, max_length=max_length)
-        embeddings  = await loop.run_in_executor(None, encode_function, texts)
-        #embeddings = [embedding.tolist() for embedding in embeddings_raw]
-        return embeddings
 
 class Chunk(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -666,12 +612,6 @@ class NumpyVectorStore(VectorStore):
 
 
 def embedding_model_factory(embedding: str, **kwargs) -> EmbeddingModel:
-
-    if re.search(r'[./]',embedding):
-        if "bge" in embedding.lower():
-            return BGEModel(embedding)
-        else:
-            return SentenceTransformer(embedding)
 
     if embedding.startswith("hybrid"):
         embedding_model_name = "-".join(embedding.split("-")[1:])
